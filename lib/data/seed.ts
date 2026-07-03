@@ -451,6 +451,7 @@ function targetSetsFor(item: RoutineExercise): RoutineSetTarget[] {
     id: `target-${item.id}-${index + 1}`,
     routineExerciseId: item.id,
     setNumber: index + 1,
+    targetWeight: "",
     targetReps: reps,
     restSeconds: compound ? 180 : 75,
     intensity: compound ? "RPE 7-9" : "1-2 reps in reserve",

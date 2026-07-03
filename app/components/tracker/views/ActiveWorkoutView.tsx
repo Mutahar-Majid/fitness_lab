@@ -1,277 +1,380 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  estimatedOneRepMax,
-  setVolume,
-} from "@/lib/domain/analytics";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { setVolume } from "@/lib/domain/analytics";
+import type { getRoutineDayExercises } from "@/lib/domain/analytics";
 import type {
-  Exercise,
-  SetType,
+  RoutineDropTarget,
+  RoutineSetTarget,
   TrackerState,
   WorkoutExercise,
   WorkoutSession,
 } from "@/lib/domain/types";
-import { restPresets } from "@/app/components/tracker/constants";
 import type {
   AddSetValues,
   PerformedSetsByWorkoutExerciseId,
 } from "@/app/components/tracker/types";
 import { emptySets, formatDuration } from "@/app/components/tracker/utils";
-import {
-  PrimaryButton,
-  SecondaryButton,
-  SectionHeader,
-} from "@/app/components/tracker/ui";
+import { PrimaryButton } from "@/app/components/tracker/ui";
+import { RoutineBuilderExerciseDetail } from "@/app/components/tracker/views/RoutineBuilderExerciseDetail";
+import { RoutineBuilderExerciseList } from "@/app/components/tracker/views/RoutineBuilderExerciseList";
+import { RoutineBuilderReorderScreen } from "@/app/components/tracker/views/RoutineBuilderReorderScreen";
+import type {
+  SetCompletionControls,
+  SetCompletionToggle,
+} from "@/app/components/tracker/views/RoutineBuilderSetTable";
+
+type DayExercise = ReturnType<typeof getRoutineDayExercises>[number];
+type PerformedSet = TrackerState["performedSets"][number];
 
 interface ActiveWorkoutViewProps {
   activeSession?: WorkoutSession;
   activeSessionDuration: number;
-  workoutExercises: WorkoutExercise[];
-  exerciseById: Map<string, Exercise>;
+  dayExercises: ReturnType<typeof getRoutineDayExercises>;
+  openMenuId: string;
+  routineState: TrackerState;
+  selectedDayName: string;
   setsByWorkoutExerciseId: PerformedSetsByWorkoutExerciseId;
-  onStart: () => void;
-  onPause: () => void;
-  onResume: () => void;
-  onComplete: () => void;
+  workoutExercises: WorkoutExercise[];
+  onAddDrop: (targetId: string) => void;
   onAddSet: (workoutExerciseId: string, values: AddSetValues) => void;
+  onAddTargetSet: (routineExerciseId: string) => void;
+  onComplete: () => void;
+  onDiscard: () => void;
+  onDeleteDrop: (targetId: string, dropId: string) => void;
+  onDeleteExercise: (routineExerciseId: string) => void;
+  onDeleteSet: (performedSetId: string) => void;
+  onDragStart: (id: string) => void;
+  onDrop: (targetId: string) => void;
+  onDropChange: (
+    targetId: string,
+    dropId: string,
+    key: "reps" | "weight",
+    value: string
+  ) => void;
+  onMenu: (id: string) => void;
+  onNotesChange: (routineExerciseId: string, notes: string) => void;
+  onRestChange: (routineExerciseId: string, restSeconds: string) => void;
+  onSuperset: (id: string) => void;
+  onTargetChange: (
+    targetId: string,
+    key: "targetWeight" | "targetReps" | "restSeconds",
+    value: string
+  ) => void;
 }
 
 export function ActiveWorkoutView({
   activeSession,
   activeSessionDuration,
-  workoutExercises,
-  exerciseById,
+  dayExercises,
+  openMenuId,
+  routineState,
+  selectedDayName,
   setsByWorkoutExerciseId,
-  onStart,
-  onPause,
-  onResume,
-  onComplete,
+  workoutExercises,
+  onAddDrop,
   onAddSet,
+  onAddTargetSet,
+  onComplete,
+  onDiscard,
+  onDeleteDrop,
+  onDeleteExercise,
+  onDeleteSet,
+  onDragStart,
+  onDrop,
+  onDropChange,
+  onMenu,
+  onNotesChange,
+  onRestChange,
+  onSuperset,
+  onTargetChange,
 }: ActiveWorkoutViewProps) {
+  const [mode, setMode] = useState<"log" | "reorder">("log");
+  const [detailExercise, setDetailExercise] = useState<DayExercise | null>(null);
   const [restSeconds, setRestSeconds] = useState(0);
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const startRestTimer = useCallback((seconds: number) => {
+    setRestSeconds(seconds);
+    setShowRestTimer(true);
+  }, []);
+  const sessionSets = workoutExercises.flatMap(
+    (workoutExercise) =>
+      setsByWorkoutExerciseId.get(workoutExercise.id) ?? emptySets
+  );
+  const sessionVolume = sessionSets.reduce(
+    (total, set) => total + setVolume(set),
+    0
+  );
+  const completionByRoutineExerciseId = useCompletionControls({
+    setsByWorkoutExerciseId,
+    workoutExercises,
+    onAddSet,
+    onDeleteSet,
+    onRestStart: startRestTimer,
+  });
 
   useEffect(() => {
-    if (restSeconds <= 0) {
+    if (!showRestTimer || restSeconds <= 0) {
       return;
     }
-    const timer = window.setTimeout(() => setRestSeconds(restSeconds - 1), 1000);
+
+    const timer = window.setTimeout(
+      () => setRestSeconds((seconds) => Math.max(0, seconds - 1)),
+      1000
+    );
+
     return () => window.clearTimeout(timer);
-  }, [restSeconds]);
+  }, [restSeconds, showRestTimer]);
 
   if (!activeSession) {
+    return null;
+  }
+
+  if (mode === "reorder") {
     return (
-      <section className="panel text-center">
-        <SectionHeader eyebrow="Active workout" title="No workout running" />
-        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-600">
-          Start the selected routine day to log sets, dropsets, supersets,
-          previous performance, rest time, and duration.
-        </p>
-        <PrimaryButton className="mt-5" onClick={onStart}>
-          Start routine
-        </PrimaryButton>
-      </section>
+      <RoutineBuilderReorderScreen
+        dayExercises={dayExercises}
+        onBack={() => setMode("log")}
+        onDragStart={onDragStart}
+        onDrop={onDrop}
+        selectedDayName={selectedDayName}
+      />
+    );
+  }
+
+  if (detailExercise) {
+    return (
+      <RoutineBuilderExerciseDetail
+        dayExercise={detailExercise}
+        state={routineState}
+        onBack={() => setDetailExercise(null)}
+      />
     );
   }
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[0.8fr_1.4fr]">
-      <aside className="panel h-fit lg:sticky lg:top-24">
-        <SectionHeader eyebrow="Session timer" title="Live set log" />
-        <h2 className="mt-3 text-5xl font-black">
-          {formatDuration(activeSessionDuration)}
-        </h2>
-        <p className="mt-2 text-sm text-stone-600">
-          Paused time excluded: {formatDuration(activeSession.totalPausedSeconds)}
-        </p>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {activeSession.status === "paused" ? (
-            <PrimaryButton onClick={onResume}>Resume</PrimaryButton>
-          ) : (
-            <SecondaryButton onClick={onPause}>Pause</SecondaryButton>
-          )}
-          <PrimaryButton onClick={onComplete}>Stop</PrimaryButton>
-        </div>
-        <div className="mt-5 rounded-lg bg-[var(--surface-rail)] p-4">
-          <p className="text-sm font-semibold text-stone-600">Rest timer</p>
-          <div className="mt-1 text-3xl font-black">
-            {formatDuration(restSeconds)}
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {restPresets.map((seconds) => (
-              <button
-                className="rounded-md bg-[var(--surface-panel)] px-2 py-3 text-sm font-bold transition hover:bg-white"
-                key={seconds}
-                onClick={() => setRestSeconds(seconds)}
-              >
-                {seconds}s
-              </button>
-            ))}
-          </div>
-        </div>
-      </aside>
-      <div className="grid gap-4">
-        {workoutExercises.map((workoutExercise) => {
-          const exercise = exerciseById.get(workoutExercise.exerciseId);
-          if (!exercise) {
-            return null;
-          }
-          return (
-            <WorkoutExerciseCard
-              exercise={exercise}
-              key={workoutExercise.id}
-              sets={setsByWorkoutExerciseId.get(workoutExercise.id) ?? emptySets}
-              workoutExercise={workoutExercise}
-              onAddSet={(values) => {
-                onAddSet(workoutExercise.id, values);
-                setRestSeconds(values.setType === "warmup" ? 60 : 120);
-              }}
-            />
-          );
-        })}
+    <section className="mt-4 grid gap-4">
+      <div className="panel grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_auto] items-stretch gap-1.5 p-2 sm:gap-2 sm:p-3">
+        <SessionMetric
+          label="Duration"
+          value={formatDuration(activeSessionDuration)}
+        />
+        <SessionMetric label="Vol (kg)" value={String(sessionVolume)} />
+        <SessionMetric label="Sets" value={String(sessionSets.length)} />
+        <PrimaryButton
+          className="h-full min-h-0 shrink-0 px-3 py-2 text-xs sm:px-4 sm:text-sm"
+          onClick={onComplete}
+        >
+          Finish
+        </PrimaryButton>
       </div>
+
+      <RoutineBuilderExerciseList
+        dayExercises={dayExercises}
+        openMenuId={openMenuId}
+        setCompletionByRoutineExerciseId={completionByRoutineExerciseId}
+        onAddDrop={onAddDrop}
+        onAddSet={onAddTargetSet}
+        onDeleteDrop={onDeleteDrop}
+        onDropChange={onDropChange}
+        onMenu={onMenu}
+        onNotesChange={onNotesChange}
+        onOpenDelete={(item) => onDeleteExercise(item.routineExercise.id)}
+        onOpenDetail={setDetailExercise}
+        onOpenReorder={() => setMode("reorder")}
+        onRestChange={onRestChange}
+        onSuperset={onSuperset}
+        onTargetChange={onTargetChange}
+      />
+
+      <button
+        className="mb-3 min-h-12 rounded-[12px] border border-[var(--signal-red)] bg-[rgba(196,76,63,0.08)] px-4 text-sm font-black text-[var(--signal-red)] transition hover:bg-[var(--signal-red)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-red)]"
+        onClick={onDiscard}
+      >
+        Discard workout
+      </button>
+
+      {showRestTimer ? (
+        <RestTimerDock
+          seconds={restSeconds}
+          onAdd={() => setRestSeconds((seconds) => seconds + 15)}
+          onSubtract={() =>
+            setRestSeconds((seconds) => Math.max(0, seconds - 15))
+          }
+          onSkip={() => {
+            setRestSeconds(0);
+            setShowRestTimer(false);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
 
-interface WorkoutExerciseCardProps {
-  exercise: Exercise;
-  workoutExercise: WorkoutExercise;
-  sets: TrackerState["performedSets"];
-  onAddSet: (values: AddSetValues) => void;
+function SessionMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-[10px] border border-[var(--line)] bg-white/80 px-2 py-1.5">
+      <p className="truncate font-mono text-[0.52rem] font-black uppercase text-[var(--muted)] sm:text-[0.58rem]">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-base font-black leading-none text-[var(--ink)] sm:text-lg">
+        {value}
+      </p>
+    </div>
+  );
 }
 
-function WorkoutExerciseCard({
-  exercise,
-  workoutExercise,
-  sets,
+function useCompletionControls({
+  setsByWorkoutExerciseId,
+  workoutExercises,
   onAddSet,
-}: WorkoutExerciseCardProps) {
-  const lastSet = sets.findLast((set) => set.setType !== "skipped");
-  const [weight, setWeight] = useState(lastSet?.weight ?? 0);
-  const [reps, setReps] = useState(lastSet?.reps ?? 8);
-  const [setType, setSetType] = useState<SetType>("normal");
-  const [isFailure, setIsFailure] = useState(false);
-  const [parentSetId, setParentSetId] = useState("");
+  onDeleteSet,
+  onRestStart,
+}: {
+  setsByWorkoutExerciseId: PerformedSetsByWorkoutExerciseId;
+  workoutExercises: WorkoutExercise[];
+  onAddSet: (workoutExerciseId: string, values: AddSetValues) => void;
+  onDeleteSet: (performedSetId: string) => void;
+  onRestStart: (seconds: number) => void;
+}) {
+  return useMemo(() => {
+    const completion = new Map<string, SetCompletionControls>();
 
-  const add = () => {
-    onAddSet({
-      weight,
-      reps,
-      setType,
-      isFailure,
-      parentSetId: setType === "drop" ? parentSetId || lastSet?.id : undefined,
-    });
-    setSetType("normal");
-    setIsFailure(false);
-    setParentSetId("");
+    for (const workoutExercise of workoutExercises) {
+      if (!workoutExercise.routineExerciseId) {
+        continue;
+      }
+
+      completion.set(workoutExercise.routineExerciseId, {
+        completedSets:
+          setsByWorkoutExerciseId.get(workoutExercise.id) ?? emptySets,
+        onToggle: (toggle) =>
+          toggleCompletion({
+            toggle,
+            workoutExerciseId: workoutExercise.id,
+            onAddSet,
+            onDeleteSet,
+            onRestStart,
+          }),
+      });
+    }
+
+    return completion;
+  }, [onAddSet, onDeleteSet, onRestStart, setsByWorkoutExerciseId, workoutExercises]);
+}
+
+function toggleCompletion({
+  toggle,
+  workoutExerciseId,
+  onAddSet,
+  onDeleteSet,
+  onRestStart,
+}: {
+  toggle: SetCompletionToggle;
+  workoutExerciseId: string;
+  onAddSet: (workoutExerciseId: string, values: AddSetValues) => void;
+  onDeleteSet: (performedSetId: string) => void;
+  onRestStart: (seconds: number) => void;
+}) {
+  if (!toggle.checked) {
+    if (toggle.completedSet) {
+      onDeleteSet(toggle.completedSet.id);
+    }
+    return;
+  }
+
+  if (toggle.drop && !toggle.parentSet) {
+    return;
+  }
+
+  onAddSet(
+    workoutExerciseId,
+    getAddSetValues({
+      drop: toggle.drop,
+      dropIndex: toggle.dropIndex,
+      parentSet: toggle.parentSet,
+      target: toggle.target,
+    })
+  );
+  onRestStart(Math.max(0, toggle.target.restSeconds));
+}
+
+function getAddSetValues({
+  drop,
+  dropIndex,
+  parentSet,
+  target,
+}: {
+  drop?: RoutineDropTarget;
+  dropIndex?: number;
+  parentSet?: PerformedSet;
+  target: RoutineSetTarget;
+}): AddSetValues {
+  return {
+    weight: parseDecimal(drop?.weight ?? target.targetWeight),
+    reps: parseInteger(drop?.reps ?? target.targetReps),
+    setType: drop ? "drop" : "normal",
+    isFailure: false,
+    setNumber: target.setNumber,
+    dropIndex,
+    parentSetId: parentSet?.id,
   };
+}
 
+function parseDecimal(value?: string) {
+  const number = Number.parseFloat(value ?? "");
+  return Number.isFinite(number) ? number : 0;
+}
+
+function parseInteger(value?: string) {
+  const number = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function RestTimerDock({
+  seconds,
+  onAdd,
+  onSkip,
+  onSubtract,
+}: {
+  seconds: number;
+  onAdd: () => void;
+  onSkip: () => void;
+  onSubtract: () => void;
+}) {
   return (
-    <article className="panel mt-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-bold">{exercise.name}</h3>
-          <p className="text-sm text-stone-600">
-            Previous shortcut:{" "}
-            {lastSet ? `${lastSet.weight} kg x ${lastSet.reps}` : "none yet"}
-            {workoutExercise.supersetGroupId ? " · superset" : ""}
+    <div className="fixed inset-x-3 bottom-24 z-50 md:bottom-6">
+      <div className="mx-auto flex max-w-md items-center justify-between gap-2 rounded-[14px] border border-white/10 bg-[rgba(12,17,17,0.94)] p-2 text-white shadow-[0_18px_54px_rgba(5,9,9,0.34)] backdrop-blur-xl">
+        <div className="min-w-0 px-2">
+          <p className="font-mono text-[0.58rem] font-black uppercase text-[var(--plate-yellow)]">
+            Rest
+          </p>
+          <p className="text-xl font-black leading-none">
+            {formatDuration(seconds)}
           </p>
         </div>
-        <span className="badge">
-          e1RM {lastSet ? estimatedOneRepMax(lastSet.weight, lastSet.reps) : 0}
-        </span>
+        <div className="grid grid-cols-3 gap-1.5">
+          <button
+            className="min-h-10 rounded-[9px] bg-white/10 px-3 text-xs font-black transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--plate-yellow)]"
+            onClick={onAdd}
+          >
+            +15
+          </button>
+          <button
+            className="min-h-10 rounded-[9px] bg-white/10 px-3 text-xs font-black transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--plate-yellow)]"
+            onClick={onSubtract}
+          >
+            -15
+          </button>
+          <button
+            className="min-h-10 rounded-[9px] bg-white px-3 text-xs font-black text-[var(--ink)] transition hover:bg-[var(--plate-yellow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--plate-yellow)]"
+            onClick={onSkip}
+          >
+            Skip
+          </button>
+        </div>
       </div>
-
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[520px] text-left text-sm">
-          <thead className="text-xs uppercase text-stone-500">
-            <tr>
-              <th className="py-2">Set</th>
-              <th>Weight</th>
-              <th>Reps</th>
-              <th>Type</th>
-              <th>Volume</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sets.map((set) => (
-              <tr className="border-t border-stone-200" key={set.id}>
-                <td className="py-2 font-bold">
-                  {set.setNumber}
-                  {set.dropIndex ? `.${set.dropIndex}` : ""}
-                </td>
-                <td>{set.weight} kg</td>
-                <td>{set.reps}</td>
-                <td>{set.isFailure ? `${set.setType} failure` : set.setType}</td>
-                <td>{setVolume(set)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {lastSet ? (
-        <SecondaryButton
-          className="mt-4"
-          onClick={() => {
-            setWeight(lastSet.weight);
-            setReps(lastSet.reps);
-          }}
-        >
-          Copy previous set
-        </SecondaryButton>
-      ) : null}
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1.2fr_auto]">
-        <input
-          className="field"
-          inputMode="decimal"
-          value={weight}
-          onChange={(event) => setWeight(Number(event.target.value))}
-        />
-        <input
-          className="field"
-          inputMode="numeric"
-          value={reps}
-          onChange={(event) => setReps(Number(event.target.value))}
-        />
-        <select
-          className="field"
-          value={setType}
-          onChange={(event) => setSetType(event.target.value as SetType)}
-        >
-          <option value="normal">Normal</option>
-          <option value="warmup">Warm-up</option>
-          <option value="drop">Dropset</option>
-          <option value="backoff">Backoff</option>
-          <option value="skipped">Skipped</option>
-        </select>
-        <PrimaryButton onClick={add}>Add set</PrimaryButton>
-      </div>
-      {setType === "drop" ? (
-        <select
-          className="field mt-2 w-full"
-          value={parentSetId}
-          onChange={(event) => setParentSetId(event.target.value)}
-        >
-          <option value="">Attach to latest set</option>
-          {sets
-            .filter((set) => !set.parentSetId)
-            .map((set) => (
-              <option key={set.id} value={set.id}>
-                Main set {set.setNumber}: {set.weight} kg x {set.reps}
-              </option>
-            ))}
-        </select>
-      ) : null}
-      <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-stone-700">
-        <input
-          checked={isFailure}
-          onChange={(event) => setIsFailure(event.target.checked)}
-          type="checkbox"
-        />
-        Mark as failure
-      </label>
-    </article>
+    </div>
   );
 }

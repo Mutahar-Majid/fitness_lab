@@ -1,9 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TrainingBrief } from "@/app/components/tracker/components/TrainingBrief";
 import { TrackerChrome } from "@/app/components/tracker/components/TrackerChrome";
+import { useRoutineDraft } from "@/app/components/tracker/hooks/useRoutineDraft";
 import { useStrengthTrackerState } from "@/app/components/tracker/hooks/useStrengthTrackerState";
 import type { Tab } from "@/app/components/tracker/types";
 import { ActiveWorkoutView } from "@/app/components/tracker/views/ActiveWorkoutView";
@@ -16,12 +26,87 @@ import { RoutineBuilderView } from "@/app/components/tracker/views/RoutineBuilde
 import { RoutinesView } from "@/app/components/tracker/views/RoutinesView";
 import { cn } from "@/lib/utils";
 
+type PendingRoutineAction = {
+  onDiscard: () => void;
+  onSave: () => void;
+};
+
 export default function StrengthTrackerApp() {
   const tracker = useStrengthTrackerState();
+  const routineDraft = useRoutineDraft();
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [activeWorkoutMenuId, setActiveWorkoutMenuId] = useState("");
   const [pendingTab, setPendingTab] = useState<Tab | null>(null);
+  const [pendingRoutineAction, setPendingRoutineAction] = useState<PendingRoutineAction | null>(
+    null
+  );
+  const beginRoutineDraft = routineDraft.begin;
+  const routineDraftState = routineDraft.state;
+  const builderState = routineDraftState ?? tracker.state;
+  const builderSelectedDay = routineDraft.selectedDay ?? tracker.selectedDay;
+  const builderDayExercises =
+    routineDraftState && routineDraft.selectedDay
+      ? routineDraft.dayExercises
+      : tracker.selectedDayExercises;
+  const isWorkoutDraft =
+    Boolean(routineDraftState) &&
+    routineDraft.selectedDay?.id === tracker.activeSession?.routineDayId;
+  const activeWorkoutDayExercises =
+    isWorkoutDraft && routineDraft.selectedDay
+      ? routineDraft.dayExercises
+      : tracker.activeSessionDayExercises;
+  const activeWorkoutRoutineState =
+    isWorkoutDraft && routineDraftState ? routineDraftState : tracker.state;
+  const activeWorkoutDayName =
+    (isWorkoutDraft
+      ? routineDraft.selectedDay?.name
+      : tracker.state.routineDays.find(
+          (day) => day.id === tracker.activeSession?.routineDayId
+        )?.name) ?? "Workout";
+  const libraryExercises = routineDraftState
+    ? routineDraft.filterDraftExercises(
+        tracker.exerciseQuery,
+        tracker.bodyPart,
+        tracker.equipment
+      )
+    : tracker.filteredExercises;
 
-  const navigateToTab = (tab: Tab) => {
+  useEffect(() => {
+    if (tracker.tab === "builder" && !routineDraftState && tracker.selectedDay) {
+      beginRoutineDraft(tracker.state, tracker.selectedDay.id);
+    }
+    if (
+      tracker.tab === "workout" &&
+      tracker.activeSession &&
+      routineDraft.selectedDay?.id !== tracker.activeSession.routineDayId
+    ) {
+      beginRoutineDraft(tracker.state, tracker.activeSession.routineDayId);
+    }
+  }, [
+    beginRoutineDraft,
+    routineDraft.selectedDay,
+    routineDraftState,
+    tracker.activeSession,
+    tracker.selectedDay,
+    tracker.state,
+    tracker.tab,
+  ]);
+
+  const runWithRoutineGuard = (action: () => void) => {
+    if (
+      routineDraft.hasChanges &&
+      (tracker.tab === "builder" ||
+        tracker.tab === "library" ||
+        tracker.tab === "workout")
+    ) {
+      setPendingRoutineAction({ onDiscard: action, onSave: action });
+      return;
+    }
+
+    action();
+  };
+
+  const navigateToTabDirect = (tab: Tab) => {
     if (tab === tracker.tab || pendingTab) {
       return;
     }
@@ -31,6 +116,67 @@ export default function StrengthTrackerApp() {
       tracker.setTab(tab);
       setPendingTab(null);
     }, 420);
+  };
+  const navigateToTab = (tab: Tab) => {
+    const staysInRoutineEdit =
+      routineDraftState && ["builder", "library"].includes(tab);
+
+    if (staysInRoutineEdit) {
+      navigateToTabDirect(tab);
+      return;
+    }
+
+    runWithRoutineGuard(() => {
+      routineDraft.clear();
+      navigateToTabDirect(tab);
+    });
+  };
+
+  const openBuilder = (dayId: string) => {
+    routineDraft.begin(tracker.state, dayId);
+    tracker.setTab("builder");
+  };
+
+  const saveRoutineDraft = () => {
+    if (!routineDraftState) {
+      return;
+    }
+
+    tracker.replaceRoutineState(routineDraftState);
+    routineDraft.markSaved();
+  };
+
+  const saveAndContinue = () => {
+    saveRoutineDraft();
+    const action = pendingRoutineAction?.onSave;
+    setPendingRoutineAction(null);
+    routineDraft.clear();
+    action?.();
+  };
+
+  const discardAndContinue = () => {
+    const action = pendingRoutineAction?.onDiscard;
+    setPendingRoutineAction(null);
+    routineDraft.clear();
+    action?.();
+  };
+
+  const finishActiveWorkout = () => {
+    if (routineDraft.hasChanges && routineDraftState) {
+      setPendingRoutineAction({
+        onDiscard: () => tracker.completeActiveSession(),
+        onSave: () => tracker.completeActiveSession(routineDraftState),
+      });
+      return;
+    }
+
+    routineDraft.clear();
+    tracker.completeActiveSession();
+  };
+
+  const discardActiveWorkout = () => {
+    routineDraft.clear();
+    tracker.discardActiveSession();
   };
 
   return (
@@ -55,7 +201,9 @@ export default function StrengthTrackerApp() {
             activeSessionDuration={tracker.activeSessionDuration}
             analytics={tracker.analytics}
             dayExercises={tracker.selectedDayExercises}
-            onOpenBuilder={() => navigateToTab("builder")}
+            onOpenBuilder={() =>
+              tracker.selectedDay ? openBuilder(tracker.selectedDay.id) : undefined
+            }
             onStart={tracker.startSelectedDay}
             selectedDay={tracker.selectedDay}
           />
@@ -80,38 +228,69 @@ export default function StrengthTrackerApp() {
               state={tracker.state}
               selectedDayId={tracker.selectedDay?.id ?? ""}
               onSelectDay={tracker.selectRoutineDay}
+              onEditDay={openBuilder}
+              onStartDay={tracker.startRoutineDay}
               onCreate={tracker.createRoutine}
               onDuplicate={tracker.duplicateRoutineById}
               onDelete={tracker.deleteRoutineById}
-              onOpenBuilder={() => navigateToTab("builder")}
-              onOpenLibrary={() => navigateToTab("library")}
             />
           ) : null}
-          {tracker.tab === "builder" && tracker.selectedDay ? (
+          {tracker.tab === "builder" && builderSelectedDay ? (
             <RoutineBuilderView
-              state={tracker.state}
-              selectedDay={tracker.selectedDay}
-              dayExercises={tracker.selectedDayExercises}
-              onSelectDay={tracker.selectRoutineDay}
-              onDragStart={tracker.setDraggedRoutineExerciseId}
-              onDrop={tracker.dropRoutineExercise}
-              onSuperset={tracker.createSupersetWithNext}
-              onTargetChange={tracker.updateTarget}
+              state={builderState}
+              selectedDay={builderSelectedDay}
+              dayExercises={builderDayExercises}
+              hasChanges={routineDraft.hasChanges}
+              onSelectDay={routineDraft.selectDay}
+              onDragStart={routineDraft.setDraggedRoutineExerciseId}
+              onDrop={routineDraft.dropRoutineExercise}
+              onSuperset={routineDraft.createSupersetWithNext}
+              onTargetChange={routineDraft.updateTarget}
+              onAddDrop={routineDraft.addDropTarget}
+              onAddSet={routineDraft.addRoutineSet}
+              onBack={() =>
+                runWithRoutineGuard(() => {
+                  routineDraft.clear();
+                  navigateToTabDirect("routines");
+                })
+              }
+              onDeleteDrop={routineDraft.deleteDropTarget}
+              onDeleteExercise={routineDraft.deleteRoutineExerciseById}
               onOpenLibrary={() => navigateToTab("library")}
+              onRestChange={routineDraft.updateExerciseRestTargets}
+              onNotesChange={routineDraft.updateRoutineExerciseNotes}
+              onDropChange={routineDraft.updateDropTarget}
+              onSave={saveRoutineDraft}
             />
           ) : null}
           {tracker.tab === "workout" ? (
             <ActiveWorkoutView
               activeSession={tracker.activeSession}
               activeSessionDuration={tracker.activeSessionDuration}
-              workoutExercises={tracker.activeWorkoutExercises}
-              exerciseById={tracker.exerciseById}
+              dayExercises={activeWorkoutDayExercises}
+              openMenuId={activeWorkoutMenuId}
+              routineState={activeWorkoutRoutineState}
+              selectedDayName={activeWorkoutDayName}
               setsByWorkoutExerciseId={tracker.setsByWorkoutExerciseId}
-              onStart={tracker.startSelectedDay}
-              onPause={tracker.pauseActiveSession}
-              onResume={tracker.resumeActiveSession}
-              onComplete={tracker.completeActiveSession}
+              workoutExercises={tracker.activeWorkoutExercises}
+              onAddDrop={routineDraft.addDropTarget}
+              onAddTargetSet={routineDraft.addRoutineSet}
+              onComplete={finishActiveWorkout}
+              onDiscard={discardActiveWorkout}
               onAddSet={tracker.addSetToWorkoutExercise}
+              onDeleteDrop={routineDraft.deleteDropTarget}
+              onDeleteExercise={routineDraft.deleteRoutineExerciseById}
+              onDeleteSet={tracker.deleteSetFromWorkout}
+              onDragStart={routineDraft.setDraggedRoutineExerciseId}
+              onDrop={routineDraft.dropRoutineExercise}
+              onDropChange={routineDraft.updateDropTarget}
+              onMenu={(id) =>
+                setActiveWorkoutMenuId((current) => (current === id ? "" : id))
+              }
+              onNotesChange={routineDraft.updateRoutineExerciseNotes}
+              onRestChange={routineDraft.updateExerciseRestTargets}
+              onSuperset={routineDraft.createSupersetWithNext}
+              onTargetChange={routineDraft.updateTarget}
             />
           ) : null}
           {tracker.tab === "library" ? (
@@ -120,14 +299,22 @@ export default function StrengthTrackerApp() {
               bodyPart={tracker.bodyPart}
               equipment={tracker.equipment}
               equipmentOptions={tracker.equipmentOptions}
-              exercises={tracker.filteredExercises}
+              exercises={libraryExercises}
               expandedExerciseId={tracker.expandedExerciseId}
-              selectedDay={tracker.selectedDay}
+              selectedDay={builderSelectedDay}
               onQuery={tracker.setExerciseQuery}
               onBodyPart={tracker.setBodyPart}
               onEquipment={tracker.setEquipment}
               onExpand={tracker.toggleExpandedExercise}
-              onAdd={tracker.addExerciseToSelectedDay}
+              onAdd={(exerciseId) => {
+                if (routineDraftState) {
+                  routineDraft.addExerciseToSelectedDay(exerciseId);
+                  tracker.setTab("builder");
+                  return;
+                }
+
+                tracker.addExerciseToSelectedDay(exerciseId);
+              }}
             />
           ) : null}
           {tracker.tab === "analytics" ? (
@@ -139,8 +326,53 @@ export default function StrengthTrackerApp() {
           ) : null}
         </section>
 
+        <UnsavedRoutineDialog
+          open={Boolean(pendingRoutineAction)}
+          onCancel={() => setPendingRoutineAction(null)}
+          onDiscard={discardAndContinue}
+          onSave={saveAndContinue}
+        />
+
       </div>
     </main>
+  );
+}
+
+function UnsavedRoutineDialog({
+  open,
+  onCancel,
+  onDiscard,
+  onSave,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onDiscard: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <p className="eyebrow">Unsaved routine</p>
+          <DialogTitle>Save routine changes?</DialogTitle>
+          <DialogDescription>
+            Your edits are still in draft. Save them before leaving, or discard
+            the draft and continue.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <button className="primary-button" onClick={onSave}>
+            Save changes
+          </button>
+          <button className="secondary-button" onClick={onDiscard}>
+            Discard
+          </button>
+          <DialogClose asChild>
+            <button className="secondary-button">Cancel</button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

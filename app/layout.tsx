@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   title: "Strength Tracker",
   description: "Routine builder, workout logger, and analytics for strength training.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/fitness-lab-logo.svg",
+    shortcut: "/fitness-lab-logo.svg",
   },
 };
 

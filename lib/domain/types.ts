@@ -61,9 +61,17 @@ export interface RoutineSetTarget {
   id: string;
   routineExerciseId: string;
   setNumber: number;
+  targetWeight?: string;
   targetReps: string;
   restSeconds: number;
   intensity: string;
+  drops?: RoutineDropTarget[];
+}
+
+export interface RoutineDropTarget {
+  id: string;
+  reps: string;
+  weight: string;
 }
 
 export interface ExerciseGroup {

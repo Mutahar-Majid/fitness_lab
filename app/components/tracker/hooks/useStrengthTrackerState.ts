@@ -11,11 +11,14 @@ import {
 import type { BodyPart, TrackerState } from "@/lib/domain/types";
 import {
   addExerciseToRoutineDay,
+  addRoutineSetTarget,
   addPerformedSet,
-  archiveRoutine,
   completeSession,
   createId,
+  deletePerformedSet,
   deleteRoutine,
+  deleteRoutineExercise,
+  discardSession,
   duplicateRoutine,
   localTrackerRepository,
   pauseSession,
@@ -107,6 +110,11 @@ export function useStrengthTrackerState() {
         : [],
     [activeSession, state.workoutExercises]
   );
+  const activeSessionDayExercises = useMemo(
+    () =>
+      activeSession ? getRoutineDayExercises(state, activeSession.routineDayId) : [],
+    [activeSession, state]
+  );
   const activeSessionDuration = activeSession
     ? getCompletedDuration(activeSession)
     : 0;
@@ -118,6 +126,29 @@ export function useStrengthTrackerState() {
     () => groupPerformedSetsByWorkoutExercise(state.performedSets),
     [state.performedSets]
   );
+  const activeRoutineTargetsByRoutineExerciseId = useMemo(() => {
+    const activeRoutineExerciseIds = new Set(
+      activeWorkoutExercises
+        .map((item) => item.routineExerciseId)
+        .filter((id): id is string => Boolean(id))
+    );
+    const grouped = new Map<string, TrackerState["routineSetTargets"]>();
+
+    for (const target of state.routineSetTargets) {
+      if (!activeRoutineExerciseIds.has(target.routineExerciseId)) {
+        continue;
+      }
+
+      const current = grouped.get(target.routineExerciseId) ?? [];
+      grouped.set(target.routineExerciseId, [...current, target]);
+    }
+
+    for (const targets of grouped.values()) {
+      targets.sort((a, b) => a.setNumber - b.setNumber);
+    }
+
+    return grouped;
+  }, [activeWorkoutExercises, state.routineSetTargets]);
   const filteredExercises = useMemo(
     () => filterExercises(state.exercises, exerciseQuery, bodyPart, equipment),
     [state.exercises, exerciseQuery, bodyPart, equipment]
@@ -134,20 +165,37 @@ export function useStrengthTrackerState() {
     setState(nextState);
   }, []);
 
-  const startSelectedDay = useCallback(() => {
-    if (!activeRoutine || !selectedDay) {
+  const replaceRoutineState = useCallback(
+    (routineState: TrackerState) => {
+      persist(mergeRoutineState(state, routineState));
+    },
+    [persist, state]
+  );
+
+  const startRoutineDay = useCallback((routineDayId: string) => {
+    const routineDay = state.routineDays.find((day) => day.id === routineDayId);
+    if (!routineDay) {
       return;
     }
 
     const result = startWorkoutFromRoutineDay(
       state,
-      activeRoutine.id,
-      selectedDay.id
+      routineDay.routineId,
+      routineDay.id
     );
     persist(result.state);
+    setSelectedDayId(routineDay.id);
     setActiveSessionId(result.sessionId);
     setTab("workout");
-  }, [activeRoutine, persist, selectedDay, state]);
+  }, [persist, state]);
+
+  const startSelectedDay = useCallback(() => {
+    if (!selectedDay) {
+      return;
+    }
+
+    startRoutineDay(selectedDay.id);
+  }, [selectedDay, startRoutineDay]);
 
   const createRoutine = useCallback(() => {
     const now = new Date().toISOString();
@@ -178,16 +226,10 @@ export function useStrengthTrackerState() {
 
   const selectRoutineDay = useCallback((dayId: string) => {
     setSelectedDayId(dayId);
-    setTab("builder");
   }, []);
 
   const duplicateRoutineById = useCallback(
     (routineId: string) => persist(duplicateRoutine(state, routineId)),
-    [persist, state]
-  );
-
-  const archiveRoutineById = useCallback(
-    (routineId: string) => persist(archiveRoutine(state, routineId)),
     [persist, state]
   );
 
@@ -245,6 +287,24 @@ export function useStrengthTrackerState() {
 
   const createSupersetWithNext = useCallback(
     (routineExerciseId: string) => {
+      const current = state.routineExercises.find(
+        (item) => item.id === routineExerciseId
+      );
+      if (current?.supersetGroupId) {
+        persist({
+          ...state,
+          routineExercises: state.routineExercises.map((item) =>
+            item.supersetGroupId === current.supersetGroupId
+              ? { ...item, supersetGroupId: undefined }
+              : item
+          ),
+          exerciseGroups: state.exerciseGroups.filter(
+            (group) => group.id !== current.supersetGroupId
+          ),
+        });
+        return;
+      }
+
       const ordered = state.routineExercises
         .filter((item) => item.routineDayId === selectedDay?.id)
         .sort((a, b) => a.exerciseOrder - b.exerciseOrder);
@@ -279,10 +339,44 @@ export function useStrengthTrackerState() {
     [persist, selectedDay, state]
   );
 
+  const deleteRoutineExerciseById = useCallback(
+    (routineExerciseId: string) => {
+      persist(deleteRoutineExercise(state, routineExerciseId));
+    },
+    [persist, state]
+  );
+
+  const updateRoutineExerciseNotes = useCallback(
+    (routineExerciseId: string, notes: string) => {
+      persist({
+        ...state,
+        routineExercises: state.routineExercises.map((item) =>
+          item.id === routineExerciseId ? { ...item, notes } : item
+        ),
+      });
+    },
+    [persist, state]
+  );
+
+  const updateExerciseRestTargets = useCallback(
+    (routineExerciseId: string, restSeconds: string) => {
+      const value = Number(restSeconds) || 0;
+      persist({
+        ...state,
+        routineSetTargets: state.routineSetTargets.map((target) =>
+          target.routineExerciseId === routineExerciseId
+            ? { ...target, restSeconds: value }
+            : target
+        ),
+      });
+    },
+    [persist, state]
+  );
+
   const updateTarget = useCallback(
     (
       targetId: string,
-      key: "targetReps" | "restSeconds",
+      key: "targetWeight" | "targetReps" | "restSeconds",
       value: string
     ) => {
       persist({
@@ -292,6 +386,80 @@ export function useStrengthTrackerState() {
             ? {
                 ...target,
                 [key]: key === "restSeconds" ? Number(value) || 0 : value,
+              }
+            : target
+        ),
+      });
+    },
+    [persist, state]
+  );
+
+  const addRoutineSet = useCallback(
+    (routineExerciseId: string) => {
+      persist(addRoutineSetTarget(state, routineExerciseId));
+    },
+    [persist, state]
+  );
+
+  const addDropTarget = useCallback(
+    (targetId: string) => {
+      persist({
+        ...state,
+        routineSetTargets: state.routineSetTargets.map((target) => {
+          if (target.id !== targetId) {
+            return target;
+          }
+
+          return {
+            ...target,
+            drops: [
+              ...(target.drops ?? []),
+              {
+                id: createId("drop"),
+                reps: "8",
+                weight: getDefaultDropWeight(target.targetWeight),
+              },
+            ],
+          };
+        }),
+      });
+    },
+    [persist, state]
+  );
+
+  const updateDropTarget = useCallback(
+    (
+      targetId: string,
+      dropId: string,
+      key: "reps" | "weight",
+      value: string
+    ) => {
+      persist({
+        ...state,
+        routineSetTargets: state.routineSetTargets.map((target) =>
+          target.id === targetId
+            ? {
+                ...target,
+                drops: (target.drops ?? []).map((drop) =>
+                  drop.id === dropId ? { ...drop, [key]: value } : drop
+                ),
+              }
+            : target
+        ),
+      });
+    },
+    [persist, state]
+  );
+
+  const deleteDropTarget = useCallback(
+    (targetId: string, dropId: string) => {
+      persist({
+        ...state,
+        routineSetTargets: state.routineSetTargets.map((target) =>
+          target.id === targetId
+            ? {
+                ...target,
+                drops: (target.drops ?? []).filter((drop) => drop.id !== dropId),
               }
             : target
         ),
@@ -312,18 +480,37 @@ export function useStrengthTrackerState() {
     }
   }, [activeSession, persist, state]);
 
-  const completeActiveSession = useCallback(() => {
+  const completeActiveSession = useCallback((routineState?: TrackerState) => {
     if (!activeSession) {
       return;
     }
 
-    persist(completeSession(state, activeSession.id));
+    const nextState = routineState ? mergeRoutineState(state, routineState) : state;
+    persist(completeSession(nextState, activeSession.id));
     setActiveSessionId("");
+    setTab("dashboard");
+  }, [activeSession, persist, state]);
+
+  const discardActiveSession = useCallback(() => {
+    if (!activeSession) {
+      return;
+    }
+
+    persist(discardSession(state, activeSession.id));
+    setActiveSessionId("");
+    setTab("dashboard");
   }, [activeSession, persist, state]);
 
   const addSetToWorkoutExercise = useCallback(
     (workoutExerciseId: string, values: AddSetValues) => {
       persist(addPerformedSet(state, workoutExerciseId, values));
+    },
+    [persist, state]
+  );
+
+  const deleteSetFromWorkout = useCallback(
+    (performedSetId: string) => {
+      persist(deletePerformedSet(state, performedSetId));
     },
     [persist, state]
   );
@@ -344,28 +531,27 @@ export function useStrengthTrackerState() {
     [persist, selectedDay, state]
   );
 
-  const resetDemoData = useCallback(() => {
-    const fresh = localTrackerRepository.reset();
-    setState(fresh);
-    setSelectedDayId(latestRoutineDay(fresh)?.id ?? "");
-    setActiveSessionId("");
-    setTab("dashboard");
-  }, []);
-
   return {
     activeRoutine,
+    activeRoutineTargetsByRoutineExerciseId,
     activeSession,
+    activeSessionDayExercises,
     activeSessionDuration,
     activeWorkoutExercises,
     addExerciseToSelectedDay,
+    addRoutineSet,
     addSetToWorkoutExercise,
     analytics,
-    archiveRoutineById,
     bodyPart,
     completeActiveSession,
     createRoutine,
     createSupersetWithNext,
+    addDropTarget,
     deleteRoutineById,
+    deleteDropTarget,
+    discardActiveSession,
+    deleteSetFromWorkout,
+    deleteRoutineExerciseById,
     dropRoutineExercise,
     equipment,
     equipmentOptions,
@@ -374,7 +560,7 @@ export function useStrengthTrackerState() {
     expandedExerciseId,
     filteredExercises,
     pauseActiveSession,
-    resetDemoData,
+    replaceRoutineState,
     resumeActiveSession,
     selectRoutineDay,
     selectedDay,
@@ -385,11 +571,31 @@ export function useStrengthTrackerState() {
     setExerciseQuery,
     setTab,
     setsByWorkoutExerciseId,
+    startRoutineDay,
     startSelectedDay,
     state,
     tab,
     toggleExpandedExercise,
     updateTarget,
+    updateDropTarget,
+    updateExerciseRestTargets,
+    updateRoutineExerciseNotes,
     duplicateRoutineById,
+  };
+}
+
+function getDefaultDropWeight(targetWeight?: string) {
+  const value = Number.parseFloat(targetWeight ?? "");
+  return Number.isFinite(value) ? String(Math.max(0, value - 5)) : "0";
+}
+
+function mergeRoutineState(state: TrackerState, routineState: TrackerState) {
+  return {
+    ...state,
+    exerciseGroups: routineState.exerciseGroups,
+    routineDays: routineState.routineDays,
+    routineExercises: routineState.routineExercises,
+    routineSetTargets: routineState.routineSetTargets,
+    routines: routineState.routines,
   };
 }

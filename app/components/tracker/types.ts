@@ -23,6 +23,8 @@ export type AddSetValues = {
   reps: number;
   setType: TrackerState["performedSets"][number]["setType"];
   isFailure: boolean;
+  setNumber?: number;
+  dropIndex?: number;
   notes?: string;
   parentSetId?: string;
 };

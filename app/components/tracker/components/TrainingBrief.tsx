@@ -6,6 +6,7 @@ import { ArrowUpRight, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { LineTrendChart } from "@/app/components/tracker/components/LineTrendChart";
 import type { AnalyticsSummary } from "@/app/components/tracker/types";
 import type { RoutineDay, WorkoutSession } from "@/lib/domain/types";
 import type { getRoutineDayExercises } from "@/lib/domain/analytics";
@@ -144,7 +145,6 @@ function PerformanceGraph({
 }: PerformanceGraphProps) {
   const [mode, setMode] = useState<GraphMode>("volume");
   const series = buildGraphSeries(analytics, mode, activeSessionDuration);
-  const maxValue = Math.max(...series.map((item) => item.value), 1);
   const total = series.reduce((sum, item) => sum + item.value, 0);
   const latest = series[series.length - 1]?.value ?? 0;
   const value =
@@ -192,24 +192,7 @@ function PerformanceGraph({
         ))}
       </div>
 
-      <div className="grid min-h-32 grid-cols-6 items-end gap-2">
-        {series.map((item) => (
-          <div className="grid gap-2" key={item.label}>
-            <div className="flex h-28 items-end rounded-[10px] bg-[var(--surface-rail)] p-1">
-              <div
-                aria-label={`${item.label}: ${item.value}`}
-                className="w-full rounded-[7px] bg-[linear-gradient(180deg,var(--signal-green),var(--steel-blue))] shadow-[inset_0_6px_12px_rgba(255,255,255,0.16)]"
-                style={{
-                  height: `${Math.max(12, (item.value / maxValue) * 100)}%`,
-                }}
-              />
-            </div>
-            <span className="truncate text-center font-mono text-[0.62rem] font-black uppercase text-[var(--muted)]">
-              {item.label}
-            </span>
-          </div>
-        ))}
-      </div>
+      <LineTrendChart points={series} />
     </Card>
   );
 }

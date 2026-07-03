@@ -187,6 +187,7 @@ export function addExerciseToRoutineDay(
     id: createId("target"),
     routineExerciseId: routineExercise.id,
     setNumber,
+    targetWeight: "",
     targetReps: "8-12",
     restSeconds: 90,
     intensity: "1-2 reps in reserve",
@@ -196,6 +197,90 @@ export function addExerciseToRoutineDay(
     ...state,
     routineExercises: [...state.routineExercises, routineExercise],
     routineSetTargets: [...state.routineSetTargets, ...targets],
+  };
+}
+
+export function addRoutineSetTarget(
+  state: TrackerState,
+  routineExerciseId: string
+) {
+  const existing = state.routineSetTargets
+    .filter((target) => target.routineExerciseId === routineExerciseId)
+    .sort((a, b) => a.setNumber - b.setNumber);
+  const previous = existing.at(-1);
+
+  return {
+    ...state,
+    routineSetTargets: [
+      ...state.routineSetTargets,
+      {
+        id: createId("target"),
+        routineExerciseId,
+        setNumber: existing.length + 1,
+        targetWeight: previous?.targetWeight ?? "",
+        targetReps: previous?.targetReps ?? "8-12",
+        restSeconds: previous?.restSeconds ?? 90,
+        intensity: previous?.intensity ?? "1-2 reps in reserve",
+      },
+    ],
+  };
+}
+
+export function deleteRoutineExercise(
+  state: TrackerState,
+  routineExerciseId: string
+) {
+  const routineExercise = state.routineExercises.find(
+    (item) => item.id === routineExerciseId
+  );
+  if (!routineExercise) {
+    return state;
+  }
+
+  const remainingForDay = state.routineExercises
+    .filter(
+      (item) =>
+        item.routineDayId === routineExercise.routineDayId &&
+        item.id !== routineExerciseId
+    )
+    .sort((a, b) => a.exerciseOrder - b.exerciseOrder);
+  const orderMap = new Map(
+    remainingForDay.map((item, index) => [item.id, index + 1])
+  );
+  const groupId = routineExercise.supersetGroupId;
+  const remainingGroupMembers = groupId
+    ? state.routineExercises.filter(
+        (item) => item.id !== routineExerciseId && item.supersetGroupId === groupId
+      )
+    : [];
+  const shouldRemoveGroup = Boolean(groupId && remainingGroupMembers.length < 2);
+
+  return {
+    ...state,
+    routineExercises: state.routineExercises
+      .filter((item) => item.id !== routineExerciseId)
+      .map((item) =>
+        orderMap.has(item.id) || (shouldRemoveGroup && item.supersetGroupId === groupId)
+          ? {
+              ...item,
+              exerciseOrder: orderMap.get(item.id) ?? item.exerciseOrder,
+              supersetGroupId:
+                shouldRemoveGroup && item.supersetGroupId === groupId
+                  ? undefined
+                  : item.supersetGroupId,
+            }
+          : item
+      ),
+    routineSetTargets: state.routineSetTargets.filter(
+      (target) => target.routineExerciseId !== routineExerciseId
+    ),
+    exerciseGroups: state.exerciseGroups.filter((group) => {
+      if (group.id !== groupId) {
+        return true;
+      }
+
+      return !shouldRemoveGroup;
+    }),
   };
 }
 
@@ -306,6 +391,29 @@ export function completeSession(state: TrackerState, sessionId: string) {
   };
 }
 
+export function discardSession(state: TrackerState, sessionId: string) {
+  const workoutExerciseIds = new Set(
+    state.workoutExercises
+      .filter((exercise) => exercise.workoutSessionId === sessionId)
+      .map((exercise) => exercise.id)
+  );
+
+  return {
+    ...state,
+    workoutSessions: state.workoutSessions.filter(
+      (session) => session.id !== sessionId
+    ),
+    workoutExercises: state.workoutExercises.filter(
+      (exercise) => exercise.workoutSessionId !== sessionId
+    ),
+    performedSets: state.performedSets.filter(
+      (set) =>
+        set.workoutSessionId !== sessionId &&
+        !workoutExerciseIds.has(set.workoutExerciseId)
+    ),
+  };
+}
+
 export function addPerformedSet(
   state: TrackerState,
   workoutExerciseId: string,
@@ -314,6 +422,8 @@ export function addPerformedSet(
     reps: number;
     setType: SetType;
     isFailure: boolean;
+    setNumber?: number;
+    dropIndex?: number;
     notes?: string;
     parentSetId?: string;
   }
@@ -331,11 +441,12 @@ export function addPerformedSet(
   const parentDrops = values.parentSetId
     ? state.performedSets.filter((set) => set.parentSetId === values.parentSetId)
     : [];
-  const setNumber =
+  const fallbackSetNumber =
     values.setType === "drop" && values.parentSetId
       ? state.performedSets.find((set) => set.id === values.parentSetId)?.setNumber ??
         siblings.length + 1
       : siblings.filter((set) => !set.parentSetId).length + 1;
+  const setNumber = values.setNumber ?? fallbackSetNumber;
 
   const performedSet: PerformedSet = {
     id: createId("set"),
@@ -351,7 +462,7 @@ export function addPerformedSet(
     parentSetId: values.parentSetId,
     dropIndex:
       values.setType === "drop" && values.parentSetId
-        ? parentDrops.length + 1
+        ? values.dropIndex ?? parentDrops.length + 1
         : undefined,
     supersetGroupId: workoutExercise.supersetGroupId,
     notes: values.notes ?? "",
@@ -361,5 +472,14 @@ export function addPerformedSet(
   return {
     ...state,
     performedSets: [...state.performedSets, performedSet],
+  };
+}
+
+export function deletePerformedSet(state: TrackerState, performedSetId: string) {
+  return {
+    ...state,
+    performedSets: state.performedSets.filter(
+      (set) => set.id !== performedSetId && set.parentSetId !== performedSetId
+    ),
   };
 }

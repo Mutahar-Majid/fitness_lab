@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Bot,
   Dumbbell,
@@ -53,13 +54,12 @@ export function TrackerChrome({
   onSidebarExpandedChange,
   onTabChange,
 }: TrackerChromeProps) {
-  const activeTab = tabs.find((item) => item.id === currentTab) ?? tabs[0];
 
   return (
     <>
       <header className="sticky top-3 z-30 rounded-[14px] border border-white/10 bg-[rgba(12,17,17,0.82)] px-3 py-3 text-white shadow-[0_18px_60px_rgba(5,9,9,0.26)] backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-between gap-3">
-          <BrandLockup activeLabel={activeTab.label} />
+          <BrandLockup />
           <Button
             aria-label="Open profile"
             className={cn(
@@ -88,7 +88,6 @@ export function TrackerChrome({
           )}
         >
           <BrandLockup
-            activeLabel="Console"
             compact={!isSidebarExpanded}
           />
           <button
@@ -115,7 +114,7 @@ export function TrackerChrome({
                 className={cn(
                   "group flex min-h-12 items-center gap-3 rounded-[13px] px-3 text-sm font-black text-white/58 transition hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--plate-yellow)]",
                   isActive &&
-                    "bg-white text-[var(--ink)] shadow-[0_14px_28px_rgba(0,0,0,0.22)]",
+                  "bg-white text-[var(--ink)] shadow-[0_14px_28px_rgba(0,0,0,0.22)]",
                   !isSidebarExpanded && "justify-center px-0",
                 )}
                 key={item.id}
@@ -178,7 +177,7 @@ export function TrackerChrome({
               className={cn(
                 "flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-[12px] px-1 text-[0.68rem] font-black text-white/56 transition hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--plate-yellow)]",
                 isActive &&
-                  "bg-white text-[var(--ink)] shadow-[0_8px_22px_rgba(0,0,0,0.2)]",
+                "bg-white text-[var(--ink)] shadow-[0_8px_22px_rgba(0,0,0,0.2)]",
               )}
               key={item.id}
               onClick={() => onTabChange(item.id)}
@@ -196,11 +195,10 @@ export function TrackerChrome({
 }
 
 interface BrandLockupProps {
-  activeLabel: string;
   compact?: boolean;
 }
 
-function BrandLockup({ activeLabel, compact }: BrandLockupProps) {
+function BrandLockup({ compact }: BrandLockupProps) {
   return (
     <div
       className={cn(
@@ -209,19 +207,23 @@ function BrandLockup({ activeLabel, compact }: BrandLockupProps) {
       )}
     >
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-white/10 text-[var(--plate-yellow)] shadow-[inset_0_-5px_0_rgba(216,184,74,0.2)]">
-        <Dumbbell aria-hidden="true" className="h-5 w-5" />
+        <Image
+          alt=""
+          aria-hidden="true"
+          className="h-8 w-8"
+          height={32}
+          src="/fitness-lab-logo.svg"
+          width={32}
+        />
       </div>
       {compact ? null : (
         <div className="min-w-0">
-          <p className="font-mono text-[0.68rem] font-black uppercase text-[var(--plate-yellow)]">
+          <h1 className="font-mono text-l font-black uppercase text-[var(--plate-yellow)]">
             Strength lab
-          </p>
-          <h1 className="truncate text-xl font-black leading-tight">
-            Training console
           </h1>
-          <p className="mt-0.5 text-xs font-bold text-white/55">{activeLabel}</p>
         </div>
       )}
+      {compact ? <span className="sr-only">Strength lab</span> : null}
     </div>
   );
 }
