@@ -218,7 +218,7 @@ export function useStrengthTrackerState() {
         {
           id: routineId,
           userId: state.userId,
-          name: "Custom Strength Block",
+          name: "New routine",
           trainingDays: 1,
           archived: false,
           createdAt: now,

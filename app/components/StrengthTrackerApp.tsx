@@ -247,6 +247,7 @@ export default function StrengthTrackerApp() {
               onSuperset={routineDraft.createSupersetWithNext}
               onTargetChange={routineDraft.updateTarget}
               onAddDrop={routineDraft.addDropTarget}
+              onAddDay={routineDraft.addRoutineDay}
               onAddSet={routineDraft.addRoutineSet}
               onBack={() =>
                 runWithRoutineGuard(() => {
@@ -258,6 +259,8 @@ export default function StrengthTrackerApp() {
               onDeleteExercise={routineDraft.deleteRoutineExerciseById}
               onOpenLibrary={() => navigateToTab("library")}
               onRestChange={routineDraft.updateExerciseRestTargets}
+              onRenameDay={routineDraft.renameRoutineDay}
+              onRenameRoutine={routineDraft.renameRoutine}
               onNotesChange={routineDraft.updateRoutineExerciseNotes}
               onDropChange={routineDraft.updateDropTarget}
               onSave={saveRoutineDraft}

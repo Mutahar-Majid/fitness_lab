@@ -55,6 +55,80 @@ export function useRoutineDraft() {
     setSelectedDayId(dayId);
   }, []);
 
+  const renameRoutine = useCallback(
+    (routineId: string, name: string) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        return;
+      }
+
+      updateDraft((current) => ({
+        ...current,
+        routines: current.routines.map((routine) =>
+          routine.id === routineId
+            ? { ...routine, name: trimmedName, updatedAt: new Date().toISOString() }
+            : routine
+        ),
+      }));
+    },
+    [updateDraft]
+  );
+
+  const renameRoutineDay = useCallback(
+    (dayId: string, name: string) => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        return;
+      }
+
+      updateDraft((current) => ({
+        ...current,
+        routineDays: current.routineDays.map((day) =>
+          day.id === dayId ? { ...day, name: trimmedName } : day
+        ),
+      }));
+    },
+    [updateDraft]
+  );
+
+  const addRoutineDay = useCallback(
+    (routineId: string) => {
+      const dayId = createId("day");
+
+      updateDraft((current) => {
+        const routineDays = current.routineDays
+          .filter((day) => day.routineId === routineId)
+          .sort((a, b) => a.dayOrder - b.dayOrder);
+        const nextDayOrder = (routineDays.at(-1)?.dayOrder ?? 0) + 1;
+        const nextTrainingDays = routineDays.length + 1;
+
+        return {
+          ...current,
+          routines: current.routines.map((routine) =>
+            routine.id === routineId
+              ? {
+                  ...routine,
+                  trainingDays: nextTrainingDays,
+                  updatedAt: new Date().toISOString(),
+                }
+              : routine
+          ),
+          routineDays: [
+            ...current.routineDays,
+            {
+              id: dayId,
+              routineId,
+              name: `Day ${nextTrainingDays}`,
+              dayOrder: nextDayOrder,
+            },
+          ],
+        };
+      });
+      setSelectedDayId(dayId);
+    },
+    [updateDraft]
+  );
+
   const updateRoutineExerciseOrder = useCallback(
     (sourceId: string, targetId: string) => {
       if (sourceId === targetId) {
@@ -326,6 +400,7 @@ export function useRoutineDraft() {
 
   return {
     addDropTarget,
+    addRoutineDay,
     addExerciseToSelectedDay,
     addRoutineSet,
     begin,
@@ -338,6 +413,8 @@ export function useRoutineDraft() {
     filterDraftExercises,
     hasChanges,
     markSaved,
+    renameRoutine,
+    renameRoutineDay,
     selectDay,
     selectedDay,
     setDraggedRoutineExerciseId,
