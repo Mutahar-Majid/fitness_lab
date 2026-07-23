@@ -323,16 +323,16 @@ export function RestTimerControl({
   };
 
   return (
-    <label className="grid min-w-44 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-[12px] border border-[var(--line)] bg-white/80 px-2 py-1.5">
-      <Timer aria-hidden="true" className="h-4 w-4 text-[var(--steel-blue)]" />
+    <label className="grid w-24 grid-cols-1 items-center rounded-[10px] border border-[var(--line)] bg-white/80 px-1.5 py-1 sm:min-w-44 sm:w-auto sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-2 sm:rounded-[12px] sm:px-2 sm:py-1.5">
+      <Timer aria-hidden="true" className="hidden h-4 w-4 text-[var(--steel-blue)] sm:block" />
       <span className="grid gap-0.5">
-        <span className="font-mono text-[0.58rem] font-black uppercase text-[var(--muted)]">
+        <span className="font-mono text-[0.5rem] font-black uppercase leading-none text-[var(--muted)] sm:text-[0.58rem]">
           Rest
         </span>
         <span className="grid grid-cols-2 gap-1">
           <select
             aria-label="Rest minutes"
-            className="min-w-0 bg-transparent text-sm font-black outline-none"
+            className="min-w-0 bg-transparent text-xs font-black outline-none sm:text-sm"
             value={minutes}
             onChange={(event) => updateRest(Number(event.target.value), seconds)}
           >
@@ -344,7 +344,7 @@ export function RestTimerControl({
           </select>
           <select
             aria-label="Rest seconds"
-            className="min-w-0 bg-transparent text-sm font-black outline-none"
+            className="min-w-0 bg-transparent text-xs font-black outline-none sm:text-sm"
             value={minutes === 5 ? 0 : seconds}
             onChange={(event) => updateRest(minutes, Number(event.target.value))}
           >

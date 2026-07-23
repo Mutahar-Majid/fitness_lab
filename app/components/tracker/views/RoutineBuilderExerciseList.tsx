@@ -1,4 +1,4 @@
-/* eslint-disable @next/next/no-img-element */
+import { useState } from "react";
 import {
   Check,
   Link2,
@@ -11,6 +11,7 @@ import {
 import type { getRoutineDayExercises } from "@/lib/domain/analytics";
 import type { Exercise, RoutineExercise } from "@/lib/domain/types";
 import { Button } from "@/components/ui/button";
+import { ExerciseStillImage } from "@/app/components/tracker/components/ExerciseStillImage";
 import {
   RestTimerControl,
   RoutineBuilderSetTable,
@@ -22,6 +23,7 @@ type DayExercise = ReturnType<typeof getRoutineDayExercises>[number];
 
 export interface RoutineBuilderExerciseListProps {
   dayExercises: DayExercise[];
+  notesCollapsedByDefault?: boolean;
   openMenuId: string;
   setCompletionByRoutineExerciseId?: Map<string, SetCompletionControls>;
   onAddDrop: (targetId: string) => void;
@@ -49,6 +51,7 @@ export interface RoutineBuilderExerciseListProps {
 
 export function RoutineBuilderExerciseList({
   dayExercises,
+  notesCollapsedByDefault,
   openMenuId,
   setCompletionByRoutineExerciseId,
   onAddDrop,
@@ -65,7 +68,7 @@ export function RoutineBuilderExerciseList({
   onTargetChange,
 }: RoutineBuilderExerciseListProps) {
   return (
-    <div className="mt-5 grid gap-3">
+    <div className="mt-5 grid min-w-0 gap-3">
       {buildExerciseBlocks(dayExercises).map((block) =>
         block.kind === "superset" ? (
           <SupersetBlock
@@ -76,6 +79,7 @@ export function RoutineBuilderExerciseList({
             onDeleteDrop={onDeleteDrop}
             onDropChange={onDropChange}
             onMenu={onMenu}
+            notesCollapsedByDefault={notesCollapsedByDefault}
             onNotesChange={onNotesChange}
             onOpenDelete={onOpenDelete}
             onOpenDetail={onOpenDetail}
@@ -95,6 +99,7 @@ export function RoutineBuilderExerciseList({
             onDeleteDrop={onDeleteDrop}
             onDropChange={onDropChange}
             onMenu={onMenu}
+            notesCollapsedByDefault={notesCollapsedByDefault}
             onNotesChange={onNotesChange}
             onOpenDelete={onOpenDelete}
             onOpenDetail={onOpenDetail}
@@ -119,6 +124,7 @@ interface SupersetBlockProps
 
 function SupersetBlock({
   block,
+  notesCollapsedByDefault,
   openMenuId,
   setCompletionByRoutineExerciseId,
   onAddDrop,
@@ -172,6 +178,7 @@ function SupersetBlock({
             onDeleteDrop={onDeleteDrop}
             onDropChange={onDropChange}
             onMenu={onMenu}
+            notesCollapsedByDefault={notesCollapsedByDefault}
             onNotesChange={onNotesChange}
             onOpenDelete={onOpenDelete}
             onOpenDetail={onOpenDetail}
@@ -197,6 +204,7 @@ interface ExerciseCardProps
 
 function ExerciseCard({
   dayExercise,
+  notesCollapsedByDefault,
   openMenuId,
   setCompletionByRoutineExerciseId,
   showRestTimer,
@@ -215,16 +223,36 @@ function ExerciseCard({
 }: ExerciseCardProps) {
   const { exercise, routineExercise, targets } = dayExercise;
   const menuOpen = openMenuId === routineExercise.id;
+  const [notesOpen, setNotesOpen] = useState(false);
+  const notesId = `quick-note-${routineExercise.id}`;
 
   return (
-    <article className="relative rounded-[16px] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(223,232,223,0.64))] p-3 shadow-[0_12px_34px_rgba(14,20,19,0.06)] sm:p-4">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+    <article className="relative min-w-0 rounded-[16px] border border-[var(--line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(223,232,223,0.64))] p-3 shadow-[0_12px_34px_rgba(14,20,19,0.06)] sm:p-4">
+      <div className="flex min-w-0 items-start gap-1 sm:gap-2">
+        <ExerciseImageButton
+          dayExercise={dayExercise}
+          onOpenDetail={onOpenDetail}
+        />
         <ExerciseTitle exercise={exercise} routineExercise={routineExercise} />
-        <div className="flex items-center justify-between gap-2 sm:justify-end">
-          <ExerciseImageButton
-            dayExercise={dayExercise}
-            onOpenDetail={onOpenDetail}
-          />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          {notesCollapsedByDefault ? (
+            <Button
+              aria-controls={notesId}
+              aria-expanded={notesOpen}
+              aria-label={`${notesOpen ? "Hide" : "Show"} note for ${exercise.name}`}
+              className={cn(
+                "h-9 w-9 rounded-[10px] sm:h-10 sm:w-10 sm:rounded-[12px]",
+                notesOpen || routineExercise.notes
+                  ? "text-[var(--steel-blue)]"
+                  : "text-[var(--muted)]"
+              )}
+              onClick={() => setNotesOpen((isOpen) => !isOpen)}
+              size="icon"
+              variant="secondary"
+            >
+              <StickyNote aria-hidden="true" className="h-4 w-4" />
+            </Button>
+          ) : null}
           {showRestTimer ? (
             <RestTimerControl
               restSeconds={targets[0]?.restSeconds ?? 0}
@@ -235,7 +263,7 @@ function ExerciseCard({
           <div className="relative">
             <Button
               aria-label={`Open actions for ${exercise.name}`}
-              className="h-10 w-10 rounded-[12px]"
+              className="h-9 w-9 rounded-[10px] sm:h-10 sm:w-10 sm:rounded-[12px]"
               onClick={() => onMenu(routineExercise.id)}
               size="icon"
               variant="secondary"
@@ -254,11 +282,14 @@ function ExerciseCard({
         </div>
       </div>
 
-      <NotesControl
-        notes={routineExercise.notes}
-        routineExerciseId={routineExercise.id}
-        onNotesChange={onNotesChange}
-      />
+      {!notesCollapsedByDefault || notesOpen ? (
+        <NotesControl
+          id={notesId}
+          notes={routineExercise.notes}
+          routineExerciseId={routineExercise.id}
+          onNotesChange={onNotesChange}
+        />
+      ) : null}
 
       <RoutineBuilderSetTable
         completion={setCompletionByRoutineExerciseId?.get(routineExercise.id)}
@@ -287,12 +318,11 @@ function ExerciseImageButton({
   return (
     <button
       aria-label={`Open ${dayExercise.exercise.name} details`}
-      className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-white bg-[var(--surface-rail)] shadow-[0_10px_24px_rgba(14,20,19,0.12)] transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--steel-blue)]"
+      className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-white bg-[var(--surface-rail)] shadow-[0_10px_24px_rgba(14,20,19,0.12)] transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--steel-blue)] sm:h-12 sm:w-12"
       onClick={() => onOpenDetail(dayExercise)}
     >
-      <img
-        alt=""
-        className="h-full w-full object-cover"
+      <ExerciseStillImage
+        alt={`${dayExercise.exercise.name} preview`}
         src={dayExercise.exercise.gifUrl}
       />
     </button>
@@ -307,9 +337,9 @@ function ExerciseTitle({
   routineExercise: RoutineExercise;
 }) {
   return (
-    <div className="min-w-0">
-      <h3 className="truncate font-bold">{exercise.name}</h3>
-      <p className="truncate text-sm text-stone-600">
+    <div className="min-w-0 flex-1 pt-0.5">
+      <h3 className="truncate text-sm font-bold leading-tight sm:text-base">{exercise.name}</h3>
+      <p className="truncate text-xs text-stone-600 sm:text-sm">
         {exercise.targetMuscles.join(", ")} · {exercise.equipment.join(", ")}
       </p>
       {routineExercise.supersetGroupId ? (
@@ -371,16 +401,21 @@ function MenuButton({
 }
 
 function NotesControl({
+  id,
   notes,
   routineExerciseId,
   onNotesChange,
 }: {
+  id?: string;
   notes: string;
   routineExerciseId: string;
   onNotesChange: (routineExerciseId: string, notes: string) => void;
 }) {
   return (
-    <label className="mt-3 grid gap-1 rounded-[13px] border border-[var(--line)] bg-white/70 p-3">
+    <label
+      className="mt-3 grid gap-1 rounded-[13px] border border-[var(--line)] bg-white/70 p-3"
+      id={id}
+    >
       <span className="flex items-center gap-2 font-mono text-[0.62rem] font-black uppercase text-[var(--muted)]">
         <StickyNote aria-hidden="true" className="h-3.5 w-3.5" />
         Quick note

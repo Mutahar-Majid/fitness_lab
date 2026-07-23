@@ -10,6 +10,7 @@ import type {
   WorkoutExercise,
   WorkoutSession,
 } from "@/lib/domain/types";
+import generatedExerciseDbExercises from "./exercisedb.generated.json";
 
 const userId = "dev-guest";
 const now = new Date("2026-07-01T10:00:00.000Z").toISOString();
@@ -277,6 +278,37 @@ export const seededExercises: Exercise[] = [
   },
 ];
 
+const exerciseDbExercises = generatedExerciseDbExercises as Exercise[];
+const exerciseDbExerciseByName = new Map(
+  exerciseDbExercises.map((exercise) => [exercise.name.toLowerCase(), exercise])
+);
+const exerciseDbSeedNameAliases = new Map([
+  ["incline-dumbbell-press", "Dumbbell Incline Bench Press"],
+  ["barbell-row", "Barbell Bent Over Row"],
+  ["lat-pulldown", "Cable Lat Pulldown Full Range Of Motion"],
+  ["back-squat", "Barbell Full Squat"],
+  ["romanian-deadlift", "Barbell Romanian Deadlift"],
+  ["overhead-press", "Barbell Standing Wide Military Press"],
+  ["cable-row", "Cable Seated Row"],
+  ["triceps-pressdown", "Cable Triceps Pushdown (V-Bar)"],
+  ["dumbbell-curl", "Dumbbell Biceps Curl"],
+  ["standing-calf-raise", "Bodyweight Standing Calf Raise"],
+]);
+const seedExerciseIdToLibraryId = new Map(
+  seededExercises.map((exercise) => [
+    exercise.id,
+    findExerciseDbExerciseForSeed(exercise)?.id ?? exercise.id,
+  ])
+);
+const missingSeededExercises = seededExercises.filter(
+  (exercise) => !findExerciseDbExerciseForSeed(exercise)
+);
+
+export const libraryExercises: Exercise[] =
+  exerciseDbExercises.length > 0
+    ? [...exerciseDbExercises, ...missingSeededExercises]
+    : seededExercises;
+
 const routine: Routine = {
   id: "routine-upper-lower",
   userId,
@@ -305,38 +337,38 @@ const exerciseGroups: ExerciseGroup[] = [
 ];
 
 const routineExercises: RoutineExercise[] = [
-  makeRoutineExercise("re-bench", "day-upper-a", "barbell-bench-press", 1),
-  makeRoutineExercise("re-row", "day-upper-a", "barbell-row", 2),
+  makeRoutineExercise("re-bench", "day-upper-a", libraryExerciseId("barbell-bench-press"), 1),
+  makeRoutineExercise("re-row", "day-upper-a", libraryExerciseId("barbell-row"), 2),
   makeRoutineExercise(
     "re-incline",
     "day-upper-a",
-    "incline-dumbbell-press",
+    libraryExerciseId("incline-dumbbell-press"),
     3
   ),
   makeRoutineExercise(
     "re-lateral",
     "day-upper-a",
-    "dumbbell-lateral-raise",
+    libraryExerciseId("dumbbell-lateral-raise"),
     4
   ),
   makeRoutineExercise(
     "re-pressdown",
     "day-upper-a",
-    "triceps-pressdown",
+    libraryExerciseId("triceps-pressdown"),
     5,
     "group-upper-a-arms"
   ),
   makeRoutineExercise(
     "re-curl",
     "day-upper-a",
-    "dumbbell-curl",
+    libraryExerciseId("dumbbell-curl"),
     6,
     "group-upper-a-arms"
   ),
-  makeRoutineExercise("re-squat", "day-lower-a", "back-squat", 1),
-  makeRoutineExercise("re-rdl", "day-lower-a", "romanian-deadlift", 2),
-  makeRoutineExercise("re-calf", "day-lower-a", "standing-calf-raise", 3),
-  makeRoutineExercise("re-leg-raise", "day-lower-a", "hanging-leg-raise", 4),
+  makeRoutineExercise("re-squat", "day-lower-a", libraryExerciseId("back-squat"), 1),
+  makeRoutineExercise("re-rdl", "day-lower-a", libraryExerciseId("romanian-deadlift"), 2),
+  makeRoutineExercise("re-calf", "day-lower-a", libraryExerciseId("standing-calf-raise"), 3),
+  makeRoutineExercise("re-leg-raise", "day-lower-a", libraryExerciseId("hanging-leg-raise"), 4),
 ];
 
 const routineSetTargets: RoutineSetTarget[] = routineExercises.flatMap((item) =>
@@ -369,19 +401,19 @@ const workoutExercises: WorkoutExercise[] = routineExercises
   }));
 
 const performedSets: PerformedSet[] = [
-  set("ps-bench-1", "we-re-bench", "barbell-bench-press", 1, 60, 8, "warmup"),
-  set("ps-bench-2", "we-re-bench", "barbell-bench-press", 2, 92.5, 5),
-  set("ps-bench-3", "we-re-bench", "barbell-bench-press", 3, 92.5, 5),
-  set("ps-bench-4", "we-re-bench", "barbell-bench-press", 4, 92.5, 4, "normal", true),
-  set("ps-row-1", "we-re-row", "barbell-row", 1, 82.5, 8),
-  set("ps-row-2", "we-re-row", "barbell-row", 2, 82.5, 8),
-  set("ps-row-3", "we-re-row", "barbell-row", 3, 82.5, 7),
-  set("ps-incline-1", "we-re-incline", "incline-dumbbell-press", 1, 30, 9),
-  set("ps-incline-2", "we-re-incline", "incline-dumbbell-press", 2, 30, 8),
-  set("ps-lateral-1", "we-re-lateral", "dumbbell-lateral-raise", 1, 10, 15),
-  set("ps-lateral-drop", "we-re-lateral", "dumbbell-lateral-raise", 2, 7.5, 10, "drop"),
-  set("ps-pressdown-1", "we-re-pressdown", "triceps-pressdown", 1, 35, 12),
-  set("ps-curl-1", "we-re-curl", "dumbbell-curl", 1, 14, 10),
+  set("ps-bench-1", "we-re-bench", libraryExerciseId("barbell-bench-press"), 1, 60, 8, "warmup"),
+  set("ps-bench-2", "we-re-bench", libraryExerciseId("barbell-bench-press"), 2, 92.5, 5),
+  set("ps-bench-3", "we-re-bench", libraryExerciseId("barbell-bench-press"), 3, 92.5, 5),
+  set("ps-bench-4", "we-re-bench", libraryExerciseId("barbell-bench-press"), 4, 92.5, 4, "normal", true),
+  set("ps-row-1", "we-re-row", libraryExerciseId("barbell-row"), 1, 82.5, 8),
+  set("ps-row-2", "we-re-row", libraryExerciseId("barbell-row"), 2, 82.5, 8),
+  set("ps-row-3", "we-re-row", libraryExerciseId("barbell-row"), 3, 82.5, 7),
+  set("ps-incline-1", "we-re-incline", libraryExerciseId("incline-dumbbell-press"), 1, 30, 9),
+  set("ps-incline-2", "we-re-incline", libraryExerciseId("incline-dumbbell-press"), 2, 30, 8),
+  set("ps-lateral-1", "we-re-lateral", libraryExerciseId("dumbbell-lateral-raise"), 1, 10, 15),
+  set("ps-lateral-drop", "we-re-lateral", libraryExerciseId("dumbbell-lateral-raise"), 2, 7.5, 10, "drop"),
+  set("ps-pressdown-1", "we-re-pressdown", libraryExerciseId("triceps-pressdown"), 1, 35, 12),
+  set("ps-curl-1", "we-re-curl", libraryExerciseId("dumbbell-curl"), 1, 14, 10),
 ];
 
 performedSets.find((item) => item.id === "ps-lateral-drop")!.parentSetId =
@@ -390,7 +422,7 @@ performedSets.find((item) => item.id === "ps-lateral-drop")!.dropIndex = 1;
 
 export const initialTrackerState: TrackerState = {
   userId,
-  exercises: seededExercises,
+  exercises: libraryExercises,
   routines: [routine],
   routineDays,
   routineExercises,
@@ -413,7 +445,7 @@ export const initialTrackerState: TrackerState = {
     {
       id: "pref-bench",
       userId,
-      exerciseId: "barbell-bench-press",
+      exerciseId: libraryExerciseId("barbell-bench-press"),
       preference: "preferred",
       notes: "Main upper-body strength marker.",
     },
@@ -439,6 +471,18 @@ function makeRoutineExercise(
         : "Add reps first, then add a small load jump.",
     supersetGroupId,
   };
+}
+
+function libraryExerciseId(seedExerciseId: string) {
+  return seedExerciseIdToLibraryId.get(seedExerciseId) ?? seedExerciseId;
+}
+
+function findExerciseDbExerciseForSeed(exercise: Exercise) {
+  const alias = exerciseDbSeedNameAliases.get(exercise.id);
+  return (
+    exerciseDbExerciseByName.get(exercise.name.toLowerCase()) ??
+    (alias ? exerciseDbExerciseByName.get(alias.toLowerCase()) : undefined)
+  );
 }
 
 function targetSetsFor(item: RoutineExercise): RoutineSetTarget[] {

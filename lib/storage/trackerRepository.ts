@@ -13,9 +13,8 @@ import type {
   WorkoutSession,
 } from "@/lib/domain/types";
 
-const STORAGE_VERSION = "v1";
+const STORAGE_VERSION = "v2";
 const storageKey = `strength-tracker-phase-1-state:${STORAGE_VERSION}`;
-const legacyStorageKey = "strength-tracker-phase-1-state";
 
 export interface TrackerRepository {
   load(): TrackerState;
@@ -30,15 +29,15 @@ export const localTrackerRepository: TrackerRepository = {
     }
 
     try {
-      const raw =
-        window.localStorage.getItem(storageKey) ??
-        window.localStorage.getItem(legacyStorageKey);
+      const raw = window.localStorage.getItem(storageKey);
       if (!raw) {
         this.save(initialTrackerState);
         return initialTrackerState;
       }
 
-      return JSON.parse(raw) as TrackerState;
+      const state = reconcileExerciseCatalog(JSON.parse(raw) as TrackerState);
+      this.save(state);
+      return state;
     } catch {
       this.save(initialTrackerState);
       return initialTrackerState;
@@ -60,6 +59,30 @@ export const localTrackerRepository: TrackerRepository = {
     return initialTrackerState;
   },
 };
+
+export function reconcileExerciseCatalog(state: TrackerState): TrackerState {
+  const currentExerciseIds = new Set(
+    initialTrackerState.exercises.map((exercise) => exercise.id)
+  );
+  const referencedExerciseIds = new Set([
+    ...state.routineExercises.map((exercise) => exercise.exerciseId),
+    ...state.workoutExercises.map((exercise) => exercise.exerciseId),
+    ...state.performedSets.map((set) => set.exerciseId),
+    ...state.exercisePreferences.map((preference) => preference.exerciseId),
+  ]);
+  const historicalExercises = state.exercises
+    .filter(
+      (exercise) =>
+        !currentExerciseIds.has(exercise.id) &&
+        referencedExerciseIds.has(exercise.id)
+    )
+    .map((exercise) => ({ ...exercise, hidden: true }));
+
+  return {
+    ...state,
+    exercises: [...initialTrackerState.exercises, ...historicalExercises],
+  };
+}
 
 export const supabaseRepositoryStatus = {
   mode: "local-dev-fallback",
@@ -172,30 +195,46 @@ export function addExerciseToRoutineDay(
   routineDayId: string,
   exerciseId: string
 ) {
-  const existing = state.routineExercises.filter(
-    (item) => item.routineDayId === routineDayId
-  );
-  const routineExercise: RoutineExercise = {
+  return addExercisesToRoutineDay(state, routineDayId, [exerciseId]);
+}
+
+export function addExercisesToRoutineDay(
+  state: TrackerState,
+  routineDayId: string,
+  exerciseIds: string[]
+) {
+  const uniqueExerciseIds = Array.from(new Set(exerciseIds));
+  if (uniqueExerciseIds.length === 0) {
+    return state;
+  }
+
+  const firstExerciseOrder =
+    state.routineExercises.filter(
+      (item) => item.routineDayId === routineDayId
+    ).length + 1;
+  const routineExercises = uniqueExerciseIds.map((exerciseId, index) => ({
     id: createId("routine-exercise"),
     routineDayId,
     exerciseId,
-    exerciseOrder: existing.length + 1,
+    exerciseOrder: firstExerciseOrder + index,
     notes: "",
     progressionNotes: "Add reps first, then add load when all sets are clean.",
-  };
-  const targets: RoutineSetTarget[] = [1, 2, 3].map((setNumber) => ({
-    id: createId("target"),
-    routineExerciseId: routineExercise.id,
-    setNumber,
-    targetWeight: "",
-    targetReps: "8-12",
-    restSeconds: 90,
-    intensity: "1-2 reps in reserve",
   }));
+  const targets = routineExercises.flatMap((routineExercise) =>
+    [1, 2, 3].map((setNumber) => ({
+      id: createId("target"),
+      routineExerciseId: routineExercise.id,
+      setNumber,
+      targetWeight: "",
+      targetReps: "8-12",
+      restSeconds: 90,
+      intensity: "1-2 reps in reserve",
+    }))
+  );
 
   return {
     ...state,
-    routineExercises: [...state.routineExercises, routineExercise],
+    routineExercises: [...state.routineExercises, ...routineExercises],
     routineSetTargets: [...state.routineSetTargets, ...targets],
   };
 }

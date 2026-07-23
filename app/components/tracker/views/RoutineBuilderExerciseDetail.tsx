@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useMemo, useState } from "react";
@@ -12,6 +11,7 @@ import {
 } from "@/lib/domain/analytics";
 import type { PerformedSet, TrackerState } from "@/lib/domain/types";
 import { Button } from "@/components/ui/button";
+import { ExerciseDemoMedia } from "@/app/components/tracker/components/ExerciseDemoMedia";
 import { LineTrendChart } from "@/app/components/tracker/components/LineTrendChart";
 import { SectionHeader } from "@/app/components/tracker/ui";
 import { cn } from "@/lib/utils";
@@ -54,13 +54,10 @@ export function RoutineBuilderExerciseDetail({
           Exercise
         </Button>
 
-        <div className="overflow-hidden rounded-[18px] border border-[var(--line)] bg-white">
-          <img
-            alt=""
-            className="aspect-[4/3] w-full object-cover"
-            src={dayExercise.exercise.gifUrl}
-          />
-        </div>
+        <ExerciseDemoMedia
+          className="aspect-[4/3] rounded-[18px]"
+          exercise={dayExercise.exercise}
+        />
 
         <div className="mt-4">
           <SectionHeader

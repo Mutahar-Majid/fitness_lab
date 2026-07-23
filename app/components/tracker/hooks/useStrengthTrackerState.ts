@@ -11,7 +11,7 @@ import {
 import { initialTrackerState } from "@/lib/data/seed";
 import type { BodyPart, TrackerState } from "@/lib/domain/types";
 import {
-  addExerciseToRoutineDay,
+  addExercisesToRoutineDay,
   addRoutineSetTarget,
   addPerformedSet,
   completeSession,
@@ -540,13 +540,13 @@ export function useStrengthTrackerState() {
     setExpandedExerciseId((current) => (current === id ? "" : id));
   }, []);
 
-  const addExerciseToSelectedDay = useCallback(
-    (exerciseId: string) => {
+  const addExercisesToSelectedDay = useCallback(
+    (exerciseIds: string[]) => {
       if (!selectedDay) {
         return;
       }
 
-      persist(addExerciseToRoutineDay(state, selectedDay.id, exerciseId));
+      persist(addExercisesToRoutineDay(state, selectedDay.id, exerciseIds));
       setTab("builder");
     },
     [persist, selectedDay, state],
@@ -559,7 +559,7 @@ export function useStrengthTrackerState() {
     activeSessionDayExercises,
     activeSessionDuration,
     activeWorkoutExercises,
-    addExerciseToSelectedDay,
+    addExercisesToSelectedDay,
     addRoutineSet,
     addSetToWorkoutExercise,
     analytics,

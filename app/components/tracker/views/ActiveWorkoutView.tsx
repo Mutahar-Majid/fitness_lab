@@ -155,7 +155,7 @@ export function ActiveWorkoutView({
 
   return (
     <section className="mt-4 grid gap-4">
-      <div className="panel grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_auto] items-stretch gap-1.5 p-2 sm:gap-2 sm:p-3">
+      <div className="panel grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_auto] items-stretch gap-1 p-1.5 sm:gap-2 sm:p-3">
         <SessionMetric
           label="Duration"
           value={formatDuration(activeSessionDuration)}
@@ -163,7 +163,7 @@ export function ActiveWorkoutView({
         <SessionMetric label="Vol (kg)" value={String(sessionVolume)} />
         <SessionMetric label="Sets" value={String(sessionSets.length)} />
         <PrimaryButton
-          className="h-full min-h-0 shrink-0 px-3 py-2 text-xs sm:px-4 sm:text-sm"
+          className="h-full min-h-0 shrink-0 px-2 py-1.5 text-[0.68rem] sm:px-4 sm:py-2 sm:text-sm"
           onClick={onComplete}
         >
           Finish
@@ -172,6 +172,7 @@ export function ActiveWorkoutView({
 
       <RoutineBuilderExerciseList
         dayExercises={dayExercises}
+        notesCollapsedByDefault
         openMenuId={openMenuId}
         setCompletionByRoutineExerciseId={completionByRoutineExerciseId}
         onAddDrop={onAddDrop}
@@ -214,11 +215,11 @@ export function ActiveWorkoutView({
 
 function SessionMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-[10px] border border-[var(--line)] bg-white/80 px-2 py-1.5">
-      <p className="truncate font-mono text-[0.52rem] font-black uppercase text-[var(--muted)] sm:text-[0.58rem]">
+    <div className="min-w-0 rounded-[8px] border border-[var(--line)] bg-white/80 px-1.5 py-1 sm:rounded-[10px] sm:px-2 sm:py-1.5">
+      <p className="truncate font-mono text-[0.46rem] font-black uppercase text-[var(--muted)] sm:text-[0.58rem]">
         {label}
       </p>
-      <p className="mt-0.5 truncate text-base font-black leading-none text-[var(--ink)] sm:text-lg">
+      <p className="mt-0.5 truncate text-sm font-black leading-none text-[var(--ink)] sm:text-lg">
         {value}
       </p>
     </div>

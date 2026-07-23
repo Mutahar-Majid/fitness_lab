@@ -7,8 +7,8 @@ reliable summaries instead of raw logs.
 
 ## What is included
 
-- Curated strength exercise seed data with aliases, body parts, equipment,
-  instructions, and lazy-loaded GIF previews.
+- ExerciseDB OSS exercise library data with aliases, body parts, equipment,
+  instructions, lazy-loaded GIF previews, and a curated local fallback.
 - Routine CRUD basics with training days, planned sets/reps/rest, drag ordering,
   duplication, archive, and superset grouping.
 - Active workout logging with pause/resume/stop, duration excluding paused time,
@@ -53,9 +53,20 @@ Core domain types live in `lib/domain/types.ts`. The hosted schema shape lives i
 
 ## Exercise import path
 
-Set `EXERCISEDB_ENDPOINT` to a compatible ExerciseDB/AscendAPI endpoint and run
-the importer with a TypeScript runner. Without an endpoint, it writes the
-curated seed preview to `work/exercisedb-import-preview.json`.
+Run the importer to refresh the cached ExerciseDB OSS library:
+
+```bash
+npm exec tsx scripts/import-exercisedb.ts
+```
+
+The importer pages through `https://oss.exercisedb.dev/api/v1/exercises` with
+`limit=25`, normalizes the ExerciseDB response into the app's `Exercise` shape,
+and writes both `lib/data/exercisedb.generated.json` and
+`work/exercisedb-import-preview.json`. You can override the source with
+`EXERCISEDB_ENDPOINT` for a compatible endpoint.
 
 The importer is deliberately separate from the UI so exercise data can be
-reviewed, filtered, and corrected before becoming app data.
+reviewed, filtered, and corrected before becoming app data. The OSS data is
+allowed for personal projects, prototypes, educational tools, non-commercial
+apps, and community fitness projects. Commercial or monetized use requires a
+paid plan through AscendAPI/RapidAPI, and AscendAPI attribution is required.

@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { getRoutineDayExercises } from "@/lib/domain/analytics";
 import type { BodyPart, TrackerState } from "@/lib/domain/types";
 import {
-  addExerciseToRoutineDay,
+  addExercisesToRoutineDay,
   addRoutineSetTarget,
   createId,
   deleteRoutineExercise,
@@ -352,14 +352,14 @@ export function useRoutineDraft() {
     [updateDraft]
   );
 
-  const addExerciseToSelectedDay = useCallback(
-    (exerciseId: string) => {
+  const addExercisesToSelectedDay = useCallback(
+    (exerciseIds: string[]) => {
       if (!selectedDay) {
         return;
       }
 
       updateDraft((current) =>
-        addExerciseToRoutineDay(current, selectedDay.id, exerciseId)
+        addExercisesToRoutineDay(current, selectedDay.id, exerciseIds)
       );
     },
     [selectedDay, updateDraft]
@@ -401,7 +401,7 @@ export function useRoutineDraft() {
   return {
     addDropTarget,
     addRoutineDay,
-    addExerciseToSelectedDay,
+    addExercisesToSelectedDay,
     addRoutineSet,
     begin,
     clear,

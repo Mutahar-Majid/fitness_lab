@@ -309,14 +309,14 @@ export default function StrengthTrackerApp() {
               onBodyPart={tracker.setBodyPart}
               onEquipment={tracker.setEquipment}
               onExpand={tracker.toggleExpandedExercise}
-              onAdd={(exerciseId) => {
+              onAdd={(exerciseIds) => {
                 if (routineDraftState) {
-                  routineDraft.addExerciseToSelectedDay(exerciseId);
+                  routineDraft.addExercisesToSelectedDay(exerciseIds);
                   tracker.setTab("builder");
                   return;
                 }
 
-                tracker.addExerciseToSelectedDay(exerciseId);
+                tracker.addExercisesToSelectedDay(exerciseIds);
               }}
             />
           ) : null}
